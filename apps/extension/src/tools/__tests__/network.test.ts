@@ -40,7 +40,9 @@ function makeDeps(
   const cdp = {
     trackSessionTab,
     ensureNetworkCapture,
-    networkEntriesSince,
+  networkEntriesSince,
+  networkEntryDetail: vi.fn(() => result),
+  clearNetworkBuffer: vi.fn(() => result),
   } satisfies NetworkCdpRunner;
   const tabsApi = {
     get:
@@ -74,7 +76,7 @@ describe("handleNetwork", () => {
     if ("code" in res) throw new Error(`unexpected error: ${JSON.stringify(res)}`);
     expect(res.entries[0].status).toBe(404);
     expect(deps.ensureNetworkCapture).toHaveBeenCalledWith(7);
-    expect(deps.networkEntriesSince).toHaveBeenCalledWith(7, undefined, 50, 1000);
+    expect(deps.networkEntriesSince).toHaveBeenCalledWith(7, undefined, 50, 1000, undefined, false);
   });
 
   it("reads an explicit tab and forwards cursor options", async () => {
@@ -97,7 +99,7 @@ describe("handleNetwork", () => {
     );
 
     expect(deps.ensureNetworkCapture).toHaveBeenCalledWith(9);
-    expect(deps.networkEntriesSince).toHaveBeenCalledWith(9, 12, 75, 1500);
+    expect(deps.networkEntriesSince).toHaveBeenCalledWith(9, 12, 75, 1500, undefined, false);
   });
 
   it("surfaces network capture failures as cdp_failed", async () => {

@@ -6,6 +6,29 @@
     "session_id"
   ],
   "properties": {
+    "clear": {
+      "description": "Reset the tab's network buffer (DevTools \"clear\" button). Entries and the sequence counter restart from 1 afterwards.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "detail": {
+      "description": "Return only this sequence's entry at full fidelity (headers + bodies). Mutually exclusive with `clear`; `since` / `limit` are ignored.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "include_static": {
+      "description": "Include static resources (Document/Script/Stylesheet/Image/...) in the index. Defaults to false: the index only lists API-shaped traffic.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "limit": {
       "description": "Maximum number of entries to return. Extension applies safe defaults and caps.",
       "type": [
@@ -43,6 +66,13 @@
         "null"
       ],
       "format": "int64"
+    },
+    "url_filter": {
+      "description": "Index-mode substring filter (case-insensitive) applied to URLs.",
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }

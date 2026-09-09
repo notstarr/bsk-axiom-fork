@@ -78,7 +78,11 @@ fn render(reply: &CredentialsResult, format: Format) -> Result<(), CliError> {
             for (origin, storage) in sorted_storage(reply) {
                 let mut keys: Vec<&String> = storage.keys().collect();
                 keys.sort();
-                let joined = keys.iter().map(|k| k.as_str()).collect::<Vec<_>>().join(", ");
+                let joined = keys
+                    .iter()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 println!("storage {origin}: {joined}");
             }
         }
@@ -119,7 +123,10 @@ mod tests {
             same_site: Some("Lax".into()),
             expires: Some(1800000000.0),
         };
-        assert_eq!(render_cookie(&cookie), "sid = abc123 (.example.com) [HttpOnly]");
+        assert_eq!(
+            render_cookie(&cookie),
+            "sid = abc123 (.example.com) [HttpOnly]"
+        );
     }
 
     #[test]
@@ -165,7 +172,10 @@ mod tests {
                 keys.sort();
                 format!(
                     "storage {origin}: {}",
-                    keys.iter().map(|k| k.as_str()).collect::<Vec<_>>().join(", ")
+                    keys.iter()
+                        .map(|k| k.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             })
             .collect();

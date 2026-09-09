@@ -739,8 +739,10 @@ describe("ChromiumCdp", () => {
     });
 
     await vi.waitFor(() => {
-      expect(cdp.networkEntriesSince(41, 0, 50, 1000).entries[0].response_body).toBe('{"ok":true}');
+      expect(cdp.networkEntryDetail(41, 1).entries[0].response_body).toBe('{"ok":true}');
     });
+    // Index rows stay body-free; bodies live behind --detail.
+    expect(cdp.networkEntriesSince(41, 0, 50, 1000).entries[0].response_body).toBeUndefined();
   });
 
   it("skips binary mimes, truncates oversize bodies, and survives body errors", async () => {
@@ -784,15 +786,65 @@ describe("ChromiumCdp", () => {
     });
 
     await vi.waitFor(() => {
-      const entries = cdp.networkEntriesSince(42, 0, 50, 1000).entries;
-      expect(entries[1].response_body).toHaveLength(256 * 1024);
+      expect(cdp.networkEntryDetail(42, 2).entries[0].response_body).toHaveLength(256 * 1024);
     });
-    const entries = cdp.networkEntriesSince(42, 0, 50, 1000).entries;
-    expect(entries[0].response_body).toBeUndefined();
+    const detail0 = cdp.networkEntryDetail(42, 1).entries[0];
+    expect(detail0.response_body).toBeUndefined(); // binary mime skipped
     // Body fetch failure stays metadata-only instead of throwing.
-    expect(entries[2].response_body).toBeUndefined();
+    expect(cdp.networkEntryDetail(42, 3).entries[0].response_body).toBeUndefined();
+    // Index rows carry no bodies.
+    expect(cdp.networkEntriesSince(42, 0, 50, 1000).entries.every((e) => e.response_body === undefined)).toBe(true);
   });
 
+
+  it("index filters static resources and extension traffic; detail and clear honor sequences", async () => {
+    const { api, onEvent } = fakeApi();
+    (api.sendCommand as ReturnType<typeof vi.fn>).mockImplementation(async () => ({}));
+    const cdp = new ChromiumCdp(api);
+
+    const fire = (requestId: string, url: string, type: string) => {
+      onEvent.fire({ tabId: 50 }, "Network.requestWillBeSent", {
+        requestId,
+        request: {
+          url,
+          method: requestId === "api" ? "POST" : "GET",
+          postData: requestId === "api" ? "{\"q\":1}" : undefined,
+          headers: requestId === "api" ? { "x-timestamp": "1770000000" } : undefined,
+        },
+        type,
+      });
+      onEvent.fire({ tabId: 50 }, "Network.responseReceived", {
+        requestId,
+        type,
+        response: { status: 200, mimeType: "application/json", headers: { "x-trace": "t9" } },
+      });
+    };
+    fire("api", "https://x.test/api/list", "Fetch");
+    fire("script", "https://x.test/assets/app.js", "Script");
+    fire("ext", "chrome-extension://abcdef/dom.js", "Other");
+
+    // Default index: API-shaped traffic only, no extension noise.
+    let index = cdp.networkEntriesSince(50, 0, 50, 1000).entries;
+    expect(index.map((e) => e.sequence)).toEqual([1]);
+    expect(index[0].url).toBe("https://x.test/api/list");
+
+    // --all opts static resources back in; extension traffic stays dropped.
+    expect(cdp.networkEntriesSince(50, 0, 50, 1000, undefined, true).entries).toHaveLength(2);
+    expect(cdp.networkEntriesSince(50, 0, 50, 1000, "APP.JS", true).entries.map((e) => e.sequence)).toEqual([2]);
+
+    // Detail bypasses projection and filters: full headers + request body.
+    const detail = cdp.networkEntryDetail(50, 1).entries[0];
+    expect(detail.request_headers).toEqual({ "x-timestamp": "1770000000" });
+    expect(detail.request_body).toBe("{\"q\":1}");
+    expect(detail.response_headers).toEqual({ "x-trace": "t9" });
+    expect(cdp.networkEntryDetail(50, 99).entries).toEqual([]);
+
+    // Clear empties the buffer and restarts sequences at 1.
+    expect(cdp.clearNetworkBuffer(50)).toEqual({ tab_id: 50, entries: [], next_since: 0, truncated: false });
+    fire("api2", "https://x.test/api/list2", "Fetch");
+    index = cdp.networkEntriesSince(50, 0, 50, 1000).entries;
+    expect(index.map((e) => e.sequence)).toEqual([1]);
+  });
   it("releases only the returning session's claim on a tab", async () => {
     const { api } = fakeApi();
     const cdp = new ChromiumCdp(api);

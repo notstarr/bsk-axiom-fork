@@ -80,10 +80,7 @@ mod tests {
         let mut storage_by_origin = HashMap::new();
         storage_by_origin.insert("https://domery.cn".to_string(), storage);
         let mut formatted_headers = HashMap::new();
-        formatted_headers.insert(
-            "Cookie".to_string(),
-            "sid=s-1; theme=dark".to_string(),
-        );
+        formatted_headers.insert("Cookie".to_string(), "sid=s-1; theme=dark".to_string());
         let result = CredentialsResult {
             target: "domery.cn".into(),
             cookie_count: 1,
@@ -105,7 +102,10 @@ mod tests {
         assert_eq!(value["cookie_count"], json!(1));
         assert_eq!(value["cookies"][0]["name"], json!("sid"));
         assert_eq!(value["cookies"][0]["http_only"], json!(true));
-        assert_eq!(value["formatted_headers"]["Cookie"], json!("sid=s-1; theme=dark"));
+        assert_eq!(
+            value["formatted_headers"]["Cookie"],
+            json!("sid=s-1; theme=dark")
+        );
         let round: CredentialsResult = serde_json::from_value(value).unwrap();
         assert_eq!(round, result);
     }

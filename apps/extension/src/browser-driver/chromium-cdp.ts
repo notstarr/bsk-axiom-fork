@@ -114,6 +114,25 @@ const MAX_NETWORK_BUFFER = 200;
 const MAX_NETWORK_FIELD_LENGTH = 4096;
 const MAX_NETWORK_REQUEST_META = 1024;
 const MAX_RESPONSE_BODY_CHARS = 256 * 1024;
+const MAX_REQUEST_BODY_CHARS = 64 * 1024;
+const MAX_HEADER_TOTAL_CHARS = 8 * 1024;
+
+/**
+ * Resource types excluded from the default index view: page-load assets
+ * drown out the API traffic agents care about. `include_static` opts back in.
+ */
+const STATIC_RESOURCE_TYPES: Record<string, true> = {
+  Document: true,
+  Script: true,
+  Stylesheet: true,
+  Image: true,
+  Media: true,
+  Font: true,
+  Manifest: true,
+  Ping: true,
+  CSPViolationReport: true,
+  SignedExchange: true,
+};
 const FRAME_DISCOVERY_TIMEOUT_MS = 1000;
 const FRAME_DISCOVERY_QUIET_MS = 20;
 
@@ -135,6 +154,10 @@ interface NetworkRequestMeta {
   method?: string;
   resourceType?: string;
   truncated: boolean;
+  requestHeaders?: Record<string, string>;
+  requestBody?: string;
+  bodyTruncated?: boolean;
+  wallTime?: number;
 }
 
 interface FrameDiscoveryState {
@@ -418,10 +441,22 @@ export class ChromiumCdp {
     since: number | undefined,
     limit: number,
     maxTextChars: number,
+    urlFilter?: string,
+    includeStatic = false,
   ): NetworkResult {
     const buf = this.networkBuffers.get(tabId) ?? [];
+    const needle = urlFilter?.toLowerCase();
+    const visible = buf.filter((entry) => {
+      if (needle && !(entry.url ?? "").toLowerCase().includes(needle)) return false;
+      if ((entry.url ?? "").startsWith("chrome-extension://")) return false;
+      if (!includeStatic && entry.kind === "response") {
+        const resourceType = entry.resource_type ?? "";
+        if (STATIC_RESOURCE_TYPES[resourceType] === true) return false;
+      }
+      return true;
+    });
     const { entries, nextSince, truncated } = readBufferedEntries(
-      buf,
+      visible,
       this.networkSequences.get(tabId) ?? 0,
       since,
       limit,
@@ -433,6 +468,30 @@ export class ChromiumCdp {
       next_since: nextSince,
       truncated,
     };
+  }
+
+  /**
+   * One buffered entry at full fidelity (headers + bodies), bypassing index
+   * projection and filters. Returns an empty result when the sequence is
+   * unknown or evicted — the index row still proves it happened.
+   */
+  networkEntryDetail(tabId: number, sequence: number): NetworkResult {
+    const buf = this.networkBuffers.get(tabId) ?? [];
+    const found = buf.find((entry) => entry.sequence === sequence);
+    return {
+      tab_id: tabId,
+      entries: found ? [found] : [],
+      next_since: this.networkSequences.get(tabId) ?? 0,
+      truncated: false,
+    };
+  }
+
+  /** DevTools-style "clear": drop buffered entries and restart sequences. */
+  clearNetworkBuffer(tabId: number): NetworkResult {
+    this.networkBuffers.delete(tabId);
+    this.networkSequences.delete(tabId);
+    this.networkRequestMeta.delete(tabId);
+    return { tab_id: tabId, entries: [], next_since: 0, truncated: false };
   }
 
   /** Detach if attached; never throws. */
@@ -843,6 +902,13 @@ export class ChromiumCdp {
       typeof raw.type === "string" ? raw.type : undefined,
       MAX_NETWORK_FIELD_LENGTH,
     );
+    const headers = sanitizeCdpHeaders(request.headers);
+    const postData =
+      typeof request.postData === "string"
+        ? request.postData.length > MAX_REQUEST_BODY_CHARS
+          ? { text: request.postData.slice(0, MAX_REQUEST_BODY_CHARS), truncated: true }
+          : { text: request.postData, truncated: false }
+        : undefined;
     const tabMeta = this.networkRequestMeta.get(tabId) ?? new Map<string, NetworkRequestMeta>();
     tabMeta.delete(id);
     tabMeta.set(id, {
@@ -851,6 +917,10 @@ export class ChromiumCdp {
       resourceType: resourceType?.text,
       truncated:
         url.truncated || (method?.truncated ?? false) || (resourceType?.truncated ?? false),
+      requestHeaders: headers?.headers,
+      requestBody: postData?.text,
+      bodyTruncated: postData?.truncated,
+      wallTime: typeof request.wallTime === "number" ? request.wallTime : undefined,
     });
     while (tabMeta.size > MAX_NETWORK_REQUEST_META) {
       const oldest = tabMeta.keys().next().value;
@@ -1150,6 +1220,32 @@ function decodeBase64Utf8(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+/**
+ * Normalize a CDP headers object (`{ [name]: value }`) into a plain record,
+ * bounded to `MAX_HEADER_TOTAL_CHARS` across all entries. Oversized header
+ * sets keep their earliest entries and flag `truncated`.
+ */
+function sanitizeCdpHeaders(
+  value: unknown,
+): { headers: Record<string, string>; truncated: boolean } | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const headers: Record<string, string> = {};
+  let total = 0;
+  let truncated = false;
+  for (const [name, entryValue] of Object.entries(raw)) {
+    const text = typeof entryValue === "string" ? entryValue : String(entryValue);
+    const cost = name.length + text.length;
+    if (total + cost > MAX_HEADER_TOTAL_CHARS) {
+      truncated = true;
+      break;
+    }
+    headers[name] = text;
+    total += cost;
+  }
+  return { headers, truncated };
+}
+
 function parseNetworkResponse(
   info: NetworkRequestMeta | undefined,
   params: unknown,
@@ -1159,6 +1255,11 @@ function parseNetworkResponse(
   const hasResponseUrl = typeof response.url === "string";
   const url = hasResponseUrl ? (response.url as string) : info?.url;
   if (!url) return null;
+  const responseHeaders = sanitizeCdpHeaders(response.headers);
+  const durationMs =
+    info?.wallTime !== undefined && typeof response.wallTime === "number"
+      ? Math.max(0, Math.round((response.wallTime - info.wallTime) * 1000))
+      : undefined;
   return makeNetworkEntry({
     kind: "response",
     method: info?.method,
@@ -1167,11 +1268,15 @@ function parseNetworkResponse(
     status_text: typeof response.statusText === "string" ? response.statusText : undefined,
     mime_type: typeof response.mimeType === "string" ? response.mimeType : undefined,
     resource_type: typeof raw.type === "string" ? raw.type : info?.resourceType,
+    request_headers: info?.requestHeaders,
+    request_body: info?.requestBody,
+    body_truncated: info?.bodyTruncated === true,
+    response_headers: responseHeaders?.headers,
+    duration_ms: durationMs,
     timestamp: typeof raw.timestamp === "number" ? raw.timestamp : undefined,
-    truncated: info?.truncated === true,
+    truncated: info?.truncated === true || (responseHeaders?.truncated ?? false),
   });
 }
-
 function parseNetworkFailure(
   info: NetworkRequestMeta | undefined,
   params: unknown,
@@ -1183,6 +1288,9 @@ function parseNetworkFailure(
     url: info?.url,
     error_text: typeof raw.errorText === "string" ? raw.errorText : undefined,
     resource_type: typeof raw.type === "string" ? raw.type : info?.resourceType,
+    request_headers: info?.requestHeaders,
+    request_body: info?.requestBody,
+    body_truncated: info?.bodyTruncated === true,
     timestamp: typeof raw.timestamp === "number" ? raw.timestamp : undefined,
     truncated: info?.truncated === true,
   });
@@ -1197,6 +1305,11 @@ function makeNetworkEntry(input: {
   mime_type?: string;
   resource_type?: string;
   error_text?: string;
+  request_headers?: Record<string, string>;
+  request_body?: string;
+  body_truncated?: boolean;
+  response_headers?: Record<string, string>;
+  duration_ms?: number;
   timestamp?: number;
   truncated?: boolean;
 }): ParsedNetworkEntry {
@@ -1218,9 +1331,14 @@ function makeNetworkEntry(input: {
     mime_type: projectedMimeType?.text,
     resource_type: projectedResourceType?.text,
     error_text: projectedError?.text,
+    request_headers: input.request_headers,
+    request_body: input.request_body,
+    response_headers: input.response_headers,
+    duration_ms: input.duration_ms,
     timestamp: input.timestamp,
     truncated:
       input.truncated === true ||
+      input.body_truncated === true ||
       (projectedMethod?.truncated ?? false) ||
       (projectedUrl?.truncated ?? false) ||
       (projectedStatusText?.truncated ?? false) ||
@@ -1230,6 +1348,11 @@ function makeNetworkEntry(input: {
   };
 }
 
+/**
+ * Index-mode projection: one compact row per packet. Bodies and header maps
+ * stay in the daemon-side buffer only — agents fetch them per-sequence via
+ * `detail`, keeping the index cheap for context.
+ */
 function projectNetworkEntry(entry: NetworkEntry, maxTextChars: number): NetworkEntry {
   const projectedUrl = truncateOptionalText(entry.url, maxTextChars);
   const projectedError =
@@ -1244,7 +1367,7 @@ function projectNetworkEntry(entry: NetworkEntry, maxTextChars: number): Network
     mime_type: entry.mime_type,
     resource_type: entry.resource_type,
     error_text: projectedError?.text,
-    response_body: entry.response_body,
+    duration_ms: entry.duration_ms,
     timestamp: entry.timestamp,
     truncated:
       entry.truncated || (projectedUrl?.truncated ?? false) || (projectedError?.truncated ?? false),

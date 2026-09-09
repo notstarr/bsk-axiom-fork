@@ -35,6 +35,14 @@
         "sequence"
       ],
       "properties": {
+        "duration_ms": {
+          "description": "Server-side duration in milliseconds (response wallTime - request wallTime).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
         "error_text": {
           "description": "CDP failure reason (`failure` entries only).",
           "type": [
@@ -57,6 +65,23 @@
             "null"
           ]
         },
+        "request_body": {
+          "description": "Request body (`request.postData`) for POST/PUT bodies, capped at 64 KB.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_headers": {
+          "description": "Request headers captured from `requestWillBeSent` (bounded, ~8 KB).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "resource_type": {
           "type": [
             "string",
@@ -69,6 +94,16 @@
             "string",
             "null"
           ]
+        },
+        "response_headers": {
+          "description": "Response headers captured from `responseReceived` (bounded, ~8 KB).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "sequence": {
           "type": "integer",

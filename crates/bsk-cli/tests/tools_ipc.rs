@@ -393,6 +393,14 @@ async fn network_returns_buffered_entries() {
                     resource_type: Some("Fetch".into()),
                     error_text: None,
                     response_body: Some("{\"ok\":true}".into()),
+                    request_headers: Some(
+                        [("x-timestamp".to_string(), "1770000000".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    request_body: Some("{\"q\":1}".into()),
+                    response_headers: None,
+                    duration_ms: Some(42.0),
                     timestamp: None,
                     truncated: false,
                 }],
@@ -413,6 +421,10 @@ async fn network_returns_buffered_entries() {
             since: Some(3),
             limit: Some(50),
             max_text_chars: Some(1000),
+            detail: None,
+            clear: None,
+            url_filter: None,
+            include_static: None,
         },
     )
     .await
@@ -420,6 +432,8 @@ async fn network_returns_buffered_entries() {
     assert_eq!(result.tab_id, 7);
     assert_eq!(result.next_since, 4);
     assert_eq!(result.entries[0].status, Some(404));
+    assert_eq!(result.entries[0].request_body.as_deref(), Some("{\"q\":1}"));
+    assert_eq!(result.entries[0].duration_ms, Some(42.0));
     handle.shutdown().await;
 }
 

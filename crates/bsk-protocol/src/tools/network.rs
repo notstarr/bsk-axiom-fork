@@ -1,5 +1,7 @@
 //! `tool.network` — read buffered network responses / failures.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +22,21 @@ pub struct NetworkParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 1))]
     pub max_text_chars: Option<u32>,
+    /// Return only this sequence's entry at full fidelity (headers + bodies).
+    /// Mutually exclusive with `clear`; `since` / `limit` are ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<u64>,
+    /// Reset the tab's network buffer (DevTools "clear" button). Entries and
+    /// the sequence counter restart from 1 afterwards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear: Option<bool>,
+    /// Index-mode substring filter (case-insensitive) applied to URLs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url_filter: Option<String>,
+    /// Include static resources (Document/Script/Stylesheet/Image/...) in the
+    /// index. Defaults to false: the index only lists API-shaped traffic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_static: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -56,6 +73,18 @@ pub struct NetworkEntry {
     /// entirely when the body is unavailable (streamed, evicted, or binary).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_body: Option<String>,
+    /// Request headers captured from `requestWillBeSent` (bounded, ~8 KB).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_headers: Option<BTreeMap<String, String>>,
+    /// Request body (`request.postData`) for POST/PUT bodies, capped at 64 KB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_body: Option<String>,
+    /// Response headers captured from `responseReceived` (bounded, ~8 KB).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_headers: Option<BTreeMap<String, String>>,
+    /// Server-side duration in milliseconds (response wallTime - request wallTime).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<f64>,
     #[serde(default)]
@@ -85,6 +114,10 @@ mod tests {
             since: None,
             limit: None,
             max_text_chars: None,
+            detail: None,
+            clear: None,
+            url_filter: None,
+            include_static: None,
         };
         let value = serde_json::to_value(&params).unwrap();
         assert_eq!(value["session_id"], "aa11");
@@ -92,6 +125,10 @@ mod tests {
         assert!(value.get("since").is_none());
         assert!(value.get("limit").is_none());
         assert!(value.get("max_text_chars").is_none());
+        assert!(value.get("detail").is_none());
+        assert!(value.get("clear").is_none());
+        assert!(value.get("url_filter").is_none());
+        assert!(value.get("include_static").is_none());
         let round: NetworkParams = serde_json::from_value(value).unwrap();
         assert_eq!(round, params);
     }
@@ -112,6 +149,16 @@ mod tests {
                     resource_type: Some("Fetch".into()),
                     error_text: None,
                     response_body: Some("{\"error\":\"nope\"}".into()),
+                    request_headers: Some(BTreeMap::from([(
+                        "content-type".to_string(),
+                        "application/json".to_string(),
+                    )])),
+                    request_body: Some("{\"q\":1}".into()),
+                    response_headers: Some(BTreeMap::from([(
+                        "x-trace".to_string(),
+                        "t1".to_string(),
+                    )])),
+                    duration_ms: Some(12.5),
                     timestamp: Some(1234.5),
                     truncated: false,
                 },
@@ -126,6 +173,10 @@ mod tests {
                     resource_type: Some("Script".into()),
                     error_text: Some("net::ERR_BLOCKED_BY_CLIENT".into()),
                     response_body: None,
+                    request_headers: None,
+                    request_body: None,
+                    response_headers: None,
+                    duration_ms: None,
                     timestamp: Some(1240.0),
                     truncated: false,
                 },
@@ -147,6 +198,20 @@ mod tests {
             json!("{\"error\":\"nope\"}")
         );
         assert!(value["entries"][1].get("response_body").is_none());
+        assert_eq!(
+            value["entries"][0]["request_headers"],
+            json!({"content-type": "application/json"})
+        );
+        assert_eq!(value["entries"][0]["request_body"], json!("{\"q\":1}"));
+        assert_eq!(
+            value["entries"][0]["response_headers"],
+            json!({"x-trace": "t1"})
+        );
+        assert_eq!(value["entries"][0]["duration_ms"], json!(12.5));
+        assert!(value["entries"][1].get("request_headers").is_none());
+        assert!(value["entries"][1].get("request_body").is_none());
+        assert!(value["entries"][1].get("response_headers").is_none());
+        assert!(value["entries"][1].get("duration_ms").is_none());
         let round: NetworkResult = serde_json::from_value(value).unwrap();
         assert_eq!(round, result);
     }

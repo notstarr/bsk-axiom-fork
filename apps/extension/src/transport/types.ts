@@ -209,6 +209,10 @@ export interface NetworkEntry {
   resource_type?: string;
   error_text?: string;
   response_body?: string;
+  request_headers?: Record<string, string>;
+  request_body?: string;
+  response_headers?: Record<string, string>;
+  duration_ms?: number;
   timestamp?: number;
   truncated: boolean;
 }
@@ -219,6 +223,10 @@ export interface NetworkParams {
   since?: number;
   limit?: number;
   max_text_chars?: number;
+  detail?: number;
+  clear?: boolean;
+  url_filter?: string;
+  include_static?: boolean;
 }
 
 export interface NetworkResult {

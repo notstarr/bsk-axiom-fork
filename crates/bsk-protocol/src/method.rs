@@ -268,7 +268,10 @@ mod tests {
     fn credentials_method_round_trips() {
         let method: Method = serde_json::from_value(json!("tool.credentials")).unwrap();
         assert_eq!(method, Method::ToolCredentials);
-        assert_eq!(serde_json::to_value(method).unwrap(), json!("tool.credentials"));
+        assert_eq!(
+            serde_json::to_value(method).unwrap(),
+            json!("tool.credentials")
+        );
     }
 
     #[test]
