@@ -113,6 +113,7 @@ const MAX_CONSOLE_STACK_FRAMES = 20;
 const MAX_NETWORK_BUFFER = 200;
 const MAX_NETWORK_FIELD_LENGTH = 4096;
 const MAX_NETWORK_REQUEST_META = 1024;
+const MAX_RESPONSE_BODY_CHARS = 256 * 1024;
 const FRAME_DISCOVERY_TIMEOUT_MS = 1000;
 const FRAME_DISCOVERY_QUIET_MS = 20;
 
@@ -765,12 +766,15 @@ export class ChromiumCdp {
         case "Network.requestWillBeSent":
           this.rememberNetworkRequest(tabId, params);
           break;
-        case "Network.responseReceived":
-          this.appendNetwork(
+        case "Network.responseReceived": {
+          const requestId = networkRequestId(params);
+          const stored = this.appendNetwork(
             tabId,
             parseNetworkResponse(this.takeNetworkRequest(tabId, params), params),
           );
+          if (stored) void this.captureResponseBody(tabId, requestId, stored);
           break;
+        }
         case "Network.loadingFailed":
           this.appendNetwork(
             tabId,
@@ -785,11 +789,43 @@ export class ChromiumCdp {
     };
   }
 
-  private appendNetwork(tabId: number, entry: ParsedNetworkEntry | null): void {
-    if (!entry) return;
+  private appendNetwork(tabId: number, entry: ParsedNetworkEntry | null): NetworkEntry | null {
+    if (!entry) return null;
     const sequence = (this.networkSequences.get(tabId) ?? 0) + 1;
     this.networkSequences.set(tabId, sequence);
-    appendBoundedEntry(this.networkBuffers, tabId, { ...entry, sequence }, MAX_NETWORK_BUFFER);
+    const stored: NetworkEntry = { ...entry, sequence };
+    appendBoundedEntry(this.networkBuffers, tabId, stored, MAX_NETWORK_BUFFER);
+    return stored;
+  }
+
+  /**
+   * Fetch the response body for JSON / text responses and attach it to the
+   * already-buffered entry (fire-and-forget; the entry object is mutated in
+   * place once the body lands). Capture is best-effort: failures (streamed,
+   * evicted, or detached targets) are swallowed, bodies are capped at
+   * 256 KB characters.
+   */
+  private async captureResponseBody(
+    tabId: number,
+    requestId: string | undefined,
+    entry: NetworkEntry,
+  ): Promise<void> {
+    if (!requestId) return;
+    const mimeType = entry.mime_type ?? "";
+    if (!mimeType.includes("json") && !mimeType.includes("text")) return;
+    try {
+      const reply = await this.send<{ body?: unknown; base64Encoded?: unknown }>(
+        tabId,
+        "Network.getResponseBody",
+        { requestId },
+      );
+      if (typeof reply?.body !== "string") return;
+      const body = reply.base64Encoded === true ? decodeBase64Utf8(reply.body) : reply.body;
+      entry.response_body =
+        body.length > MAX_RESPONSE_BODY_CHARS ? body.slice(0, MAX_RESPONSE_BODY_CHARS) : body;
+    } catch {
+      // Body unavailable — response capture stays metadata-only for this entry.
+    }
   }
 
   /** Remember `requestWillBeSent` metadata so responses/failures can be attributed. */
@@ -1103,6 +1139,17 @@ function truncateOptionalConsoleField(value: string | undefined): string | undef
   return truncateOptionalText(value, MAX_CONSOLE_FIELD_LENGTH)?.text;
 }
 
+function networkRequestId(params: unknown): string | undefined {
+  const raw = (params ?? {}) as Record<string, unknown>;
+  return typeof raw.requestId === "string" ? raw.requestId : undefined;
+}
+
+/** CDP flags some bodies as base64; decode as UTF-8 so capture stays text. */
+function decodeBase64Utf8(value: string): string {
+  const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function parseNetworkResponse(
   info: NetworkRequestMeta | undefined,
   params: unknown,
@@ -1197,6 +1244,7 @@ function projectNetworkEntry(entry: NetworkEntry, maxTextChars: number): Network
     mime_type: entry.mime_type,
     resource_type: entry.resource_type,
     error_text: projectedError?.text,
+    response_body: entry.response_body,
     timestamp: entry.timestamp,
     truncated:
       entry.truncated || (projectedUrl?.truncated ?? false) || (projectedError?.truncated ?? false),

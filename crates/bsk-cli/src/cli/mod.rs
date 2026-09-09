@@ -6,6 +6,7 @@ mod atomic_output;
 pub mod browser_wait;
 pub mod browsers;
 pub mod business_rpc;
+pub mod credentials;
 pub mod console;
 pub mod daemon;
 pub mod dialogs;
@@ -40,6 +41,7 @@ pub mod window;
 use clap::{Args, Parser, Subcommand};
 
 use crate::cli::console::ConsoleArgs;
+use crate::cli::credentials::CredentialsArgs;
 use crate::cli::daemon::DaemonCmd;
 use crate::cli::download::DownloadArgs;
 use crate::cli::emulate::EmulateArgs;
@@ -148,6 +150,9 @@ pub enum Command {
 
     /// Read buffered network responses / failures.
     Network(NetworkArgs),
+
+    /// Extract cookies and web storage for one domain (axiom fork).
+    Credentials(CredentialsArgs),
 
     /// Dump raw HTML for a tab or a snapshot ref.
     #[command(name = "get-html")]

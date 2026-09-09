@@ -714,6 +714,85 @@ describe("ChromiumCdp", () => {
     expect(cdp.networkEntriesSince(33, 0, 50, 1000).entries[0].url).toBeUndefined();
   });
 
+  it("captures JSON response bodies onto buffered entries", async () => {
+    const { api, onEvent } = fakeApi();
+    (api.sendCommand as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_target, method: string, params?: { requestId?: string }) => {
+        if (method === "Network.getResponseBody") {
+          return params?.requestId === "evicted"
+            ? new Error("No resource with given identifier found")
+            : { body: '{"ok":true}', base64Encoded: false };
+        }
+        return {};
+      },
+    );
+    const cdp = new ChromiumCdp(api);
+
+    onEvent.fire({ tabId: 41 }, "Network.requestWillBeSent", {
+      requestId: "r1",
+      request: { url: "https://x.test/api", method: "GET" },
+      type: "Fetch",
+    });
+    onEvent.fire({ tabId: 41 }, "Network.responseReceived", {
+      requestId: "r1",
+      response: { status: 200, mimeType: "application/json" },
+    });
+
+    await vi.waitFor(() => {
+      expect(cdp.networkEntriesSince(41, 0, 50, 1000).entries[0].response_body).toBe('{"ok":true}');
+    });
+  });
+
+  it("skips binary mimes, truncates oversize bodies, and survives body errors", async () => {
+    const { api, onEvent } = fakeApi();
+    const oversize = "y".repeat(256 * 1024 + 10);
+    (api.sendCommand as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_target, method: string, params?: { requestId?: string }) => {
+        if (method === "Network.getResponseBody") {
+          if (params?.requestId === "big") return { body: oversize, base64Encoded: false };
+          if (params?.requestId === "gone") throw new Error("evicted");
+          return { body: "\x89PNG", base64Encoded: true };
+        }
+        return {};
+      },
+    );
+    const cdp = new ChromiumCdp(api);
+
+    onEvent.fire({ tabId: 42 }, "Network.requestWillBeSent", {
+      requestId: "img",
+      request: { url: "https://x.test/img", method: "GET" },
+    });
+    onEvent.fire({ tabId: 42 }, "Network.responseReceived", {
+      requestId: "img",
+      response: { status: 200, mimeType: "image/png" },
+    });
+    onEvent.fire({ tabId: 42 }, "Network.requestWillBeSent", {
+      requestId: "big",
+      request: { url: "https://x.test/big", method: "GET" },
+    });
+    onEvent.fire({ tabId: 42 }, "Network.responseReceived", {
+      requestId: "big",
+      response: { status: 200, mimeType: "text/html" },
+    });
+    onEvent.fire({ tabId: 42 }, "Network.requestWillBeSent", {
+      requestId: "gone",
+      request: { url: "https://x.test/gone", method: "GET" },
+    });
+    onEvent.fire({ tabId: 42 }, "Network.responseReceived", {
+      requestId: "gone",
+      response: { status: 200, mimeType: "application/json" },
+    });
+
+    await vi.waitFor(() => {
+      const entries = cdp.networkEntriesSince(42, 0, 50, 1000).entries;
+      expect(entries[1].response_body).toHaveLength(256 * 1024);
+    });
+    const entries = cdp.networkEntriesSince(42, 0, 50, 1000).entries;
+    expect(entries[0].response_body).toBeUndefined();
+    // Body fetch failure stays metadata-only instead of throwing.
+    expect(entries[2].response_body).toBeUndefined();
+  });
+
   it("releases only the returning session's claim on a tab", async () => {
     const { api } = fakeApi();
     const cdp = new ChromiumCdp(api);

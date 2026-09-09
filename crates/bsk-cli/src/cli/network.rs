@@ -74,6 +74,9 @@ fn render(reply: &NetworkResult, format: Format) -> Result<(), CliError> {
             } else {
                 for entry in &reply.entries {
                     println!("{}", render_entry(entry));
+                    if let Some(body) = &entry.response_body {
+                        println!("{}", render_response_body(body));
+                    }
                 }
             }
             if reply.truncated {
@@ -105,6 +108,19 @@ fn render_entry(entry: &NetworkEntry) -> String {
     }
 }
 
+/// Human output caps the captured body preview; JSON output keeps the full
+/// extension-capped payload (up to 256 KB per entry).
+const RENDER_BODY_MAX_CHARS: usize = 500;
+
+fn render_response_body(body: &str) -> String {
+    let char_count = body.chars().count();
+    if char_count <= RENDER_BODY_MAX_CHARS {
+        return format!("  body: {body}");
+    }
+    let snippet: String = body.chars().take(RENDER_BODY_MAX_CHARS).collect();
+    format!("  body (first {RENDER_BODY_MAX_CHARS} of {char_count} chars): {snippet}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,6 +138,7 @@ mod tests {
             mime_type: None,
             resource_type: Some("Fetch".into()),
             error_text: Some("net::ERR_FAILED".into()),
+            response_body: None,
             timestamp: None,
             truncated: false,
         };
@@ -130,5 +147,18 @@ mod tests {
             render_entry(&entry),
             "#7 FAILED GET (unknown) - net::ERR_FAILED"
         );
+    }
+
+    #[test]
+    fn human_response_body_line_keeps_short_bodies_whole() {
+        assert_eq!(render_response_body("{\"a\":1}"), "  body: {\"a\":1}");
+    }
+
+    #[test]
+    fn human_response_body_line_truncates_long_bodies() {
+        let body = "x".repeat(600);
+        let line = render_response_body(&body);
+        assert!(line.starts_with("  body (first 500 of 600 chars): "));
+        assert!(line.ends_with(&"x".repeat(500)));
     }
 }

@@ -1,6 +1,7 @@
 //! Typed params/results for the `tool.*` RPC methods (§7).
 
 pub mod console;
+pub mod credentials;
 pub mod dialog;
 pub mod emulate;
 pub mod file_transfer;
@@ -18,8 +19,8 @@ pub mod session;
 pub mod tabs;
 pub mod waits;
 pub mod window;
-
 pub use console::*;
+pub use credentials::*;
 pub use dialog::*;
 pub use emulate::*;
 pub use file_transfer::*;

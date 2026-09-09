@@ -51,6 +51,11 @@ pub struct NetworkEntry {
     /// CDP failure reason (`failure` entries only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_text: Option<String>,
+    /// Captured response body for JSON / text responses (`response` entries
+    /// only). The extension caps the payload at 256 KB and skips capture
+    /// entirely when the body is unavailable (streamed, evicted, or binary).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<f64>,
     #[serde(default)]
@@ -106,6 +111,7 @@ mod tests {
                     mime_type: Some("application/json".into()),
                     resource_type: Some("Fetch".into()),
                     error_text: None,
+                    response_body: Some("{\"error\":\"nope\"}".into()),
                     timestamp: Some(1234.5),
                     truncated: false,
                 },
@@ -119,6 +125,7 @@ mod tests {
                     mime_type: None,
                     resource_type: Some("Script".into()),
                     error_text: Some("net::ERR_BLOCKED_BY_CLIENT".into()),
+                    response_body: None,
                     timestamp: Some(1240.0),
                     truncated: false,
                 },
@@ -135,6 +142,11 @@ mod tests {
             value["entries"][1]["error_text"],
             json!("net::ERR_BLOCKED_BY_CLIENT")
         );
+        assert_eq!(
+            value["entries"][0]["response_body"],
+            json!("{\"error\":\"nope\"}")
+        );
+        assert!(value["entries"][1].get("response_body").is_none());
         let round: NetworkResult = serde_json::from_value(value).unwrap();
         assert_eq!(round, result);
     }

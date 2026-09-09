@@ -63,6 +63,13 @@
             "null"
           ]
         },
+        "response_body": {
+          "description": "Captured response body for JSON / text responses (`response` entries only). The extension caps the payload at 256 KB and skips capture entirely when the body is unavailable (streamed, evicted, or binary).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sequence": {
           "type": "integer",
           "format": "uint64",

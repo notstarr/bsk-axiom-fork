@@ -392,6 +392,7 @@ async fn network_returns_buffered_entries() {
                     mime_type: Some("application/json".into()),
                     resource_type: Some("Fetch".into()),
                     error_text: None,
+                    response_body: Some("{\"ok\":true}".into()),
                     timestamp: None,
                     truncated: false,
                 }],

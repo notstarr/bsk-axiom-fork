@@ -4,6 +4,7 @@ import type { Transport } from "@/transport/transport";
 import type {
   ClickParams,
   ConsoleParams,
+  CredentialsParams,
   DownloadParams,
   EmulateParams,
   EvaluateParams,
@@ -33,6 +34,10 @@ import type {
   WaitForNavigationParams,
 } from "@/transport/types";
 import { isRequestFrame } from "@/transport/types";
+import {
+  chromeCookiesApi,
+  handleCredentials,
+} from "./credentials";
 import { handleConsole } from "./console";
 import { handleDownload } from "./download";
 import { type EmulateCdpRunner, handleEmulate } from "./emulate";
@@ -385,6 +390,15 @@ export class ToolDispatcher {
           this.sessions,
           req.params as NetworkParams,
           this.cdp ? { cdp: this.cdp, tabsApi: chromeTabsApi } : undefined,
+          signal,
+        );
+      case "tool.credentials":
+        return handleCredentials(
+          this.sessions,
+          req.params as CredentialsParams,
+          this.cdp
+            ? { cookies: chromeCookiesApi, tabsApi: chromeTabsApi, cdp: this.cdp }
+            : undefined,
           signal,
         );
       case "tool.snapshot":

@@ -94,6 +94,8 @@ pub enum Method {
     ToolConsole,
     #[serde(rename = "tool.network")]
     ToolNetwork,
+    #[serde(rename = "tool.credentials")]
+    ToolCredentials,
     #[serde(rename = "tool.evaluate")]
     ToolEvaluate,
     #[serde(rename = "tool.wait_for_navigation")]
@@ -192,6 +194,7 @@ impl Method {
             | Method::ToolScreenshot
             | Method::ToolConsole
             | Method::ToolNetwork
+            | Method::ToolCredentials
             | Method::ToolWaitForNavigation
             | Method::ToolWaitMs
             | Method::ToolRequestHelp
@@ -262,6 +265,13 @@ mod tests {
     }
 
     #[test]
+    fn credentials_method_round_trips() {
+        let method: Method = serde_json::from_value(json!("tool.credentials")).unwrap();
+        assert_eq!(method, Method::ToolCredentials);
+        assert_eq!(serde_json::to_value(method).unwrap(), json!("tool.credentials"));
+    }
+
+    #[test]
     fn emulate_method_round_trips() {
         let method: Method = serde_json::from_value(json!("tool.emulate")).unwrap();
         assert_eq!(method, Method::ToolEmulate);
@@ -297,7 +307,8 @@ mod tests {
     fn is_mutating_classifies_mutating_tools_as_mutating() {
         assert!(Method::ToolTabCreate.is_mutating());
         assert!(Method::ToolTabClose.is_mutating());
-        assert!(Method::ToolTabBorrow.is_mutating());
+        assert!(!Method::ToolNetwork.is_mutating());
+        assert!(!Method::ToolCredentials.is_mutating());
         assert!(Method::ToolTabReturn.is_mutating());
         assert!(Method::ToolTabSelect.is_mutating());
         assert!(Method::ToolNavigate.is_mutating());

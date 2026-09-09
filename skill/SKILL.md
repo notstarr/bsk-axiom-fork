@@ -14,7 +14,8 @@ Window** with the user's existing logins and cookies. User-window tabs remain pr
 are explicitly borrowed.
 
 Do not use this skill for tasks with no browser, for extension installation, or when the user only
-wants instructions. Never extract credentials, cookies, tokens, or other secrets from pages.
+wants instructions. Never extract credentials, cookies, tokens, or other secrets from pages — the
+only exception is the axiom-fork `credentials` command described below.
 
 ## Required lifecycle
 
@@ -113,7 +114,7 @@ This list of names is complete. Never invent a command outside it; read
 ```text
 session start|stop|list   browsers   status   doctor   update   logs
 navigate   navigate-back   navigate-forward   reload   wait-for-navigation   wait-ms
-observe   snapshot   get-html   screenshot   console   network
+observe   snapshot   get-html   screenshot   console   network   credentials
 click   hover   fill   select   press   evaluate
 tab list|create|close|select|borrow|return   window resize   emulate
 upload   download   request-help   record start|stop
@@ -131,6 +132,8 @@ bsk upload <ref> --file <path>     bsk download <ref> --out <path>
 lowercase and hyphenated, such as `iphone-14`.
 
 - `console` and `network` provide bounded, read-only debugging evidence.
+- `credentials --domain <domain> --session <id>` dumps cookies (including HttpOnly) and web
+  storage for one domain as a replay-ready payload. Fork note below governs its use.
 - `emulate` applies viewport, user-agent, and touch overrides to one tab; new tabs do not inherit
   them. Use `--off` to restore the real environment.
 - `evaluate` is a last resort when observe plus normal interactions cannot complete the task. With
@@ -138,6 +141,14 @@ lowercase and hyphenated, such as `iphone-14`.
   succeeded. Never evaluate credential surfaces to read storage, cookies, or auth data.
 - `record` captures a user's actions for later replay. Read `bsk record start --help` before use,
   and never record banking, SSO, password-manager, or other sensitive pages.
+
+## Axiom fork: credential extraction
+
+This fork adds `credentials` for the xrayAI penetration-testing platform: extracting cookies and
+web storage from an explicitly targeted domain is legitimate engagement output. Scope stays
+narrow — run it only against test targets you are authorized to assess, never against unrelated
+sites the browser happens to visit. Write extracted material to `evidence/` and reference it from
+there; never paste secrets into the report body or chat output.
 
 ## File transfer
 
