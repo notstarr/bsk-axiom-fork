@@ -5,7 +5,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 Starting from 0.2.0, CLI / Extension / DSH Plugin share the same version number.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-16
+
+### Added
+
+- [Remote browser connections](docs/remote-extension-connection.md) with a built-in
+  server, one-use pairing links, device credential renewal and revocation, and
+  support for native TLS or a TLS reverse proxy. Remote upload and download are unsupported.
+- [Operation audit](docs/operation-audit.md): opt-in task history stored on the
+  daemon host, with redacted operation metadata, export, deletion and 30-day retention
+- [Full-page screenshots](docs/long-screenshot.md) from extension Quick Actions and
+  the CLI, with streamed PNG output, cancellation and lazy-loaded page capture
+- Canvas visual refs, on-demand element screenshots and screenshot-bound point
+  clicks; observation cursor continuation when an explicit token limit is used
+- [Scroll-to element primitive](docs/scroll-to.md) across CLI, Extension and DSH Plugin,
+  with ancestor-clipped visible bounds, iframe support and cooperative cancellation
+- Native [mouse-wheel input](docs/wheel.md), explicit focus and blur actions
+- [Host-managed daemon setup](docs/sandboxed-agents.md) with `BSK_HOME` and
+  `BSK_AUTO_START=0` for agents whose command sandboxes reap background processes
+- Configurable local connection port in the extension popup and Korean localization
+
+### Changed
+
+- **Automation settings:** the extension's saved borrow-confirmation and human-help
+  switches govern existing and new sessions. `--unattended`, `tab borrow --no-confirm`
+  and `BSK_REQUEST_HELP=off` are deprecated compatibility inputs and cannot override
+  these switches. Set the browser preferences when upgrading unattended workflows.
+- Managed CLI skills update only while their content matches the installed baseline;
+  custom instructions and local edits are preserved, with recovery guidance in `doctor`
+- DSH Plugin: use the native browser sidebar when available, with a floating-panel fallback
+
+### Fixed
+
+- Windows installer path handling, verification of the resolved executable, and
+  replacement of installations using a daemon from another directory
+- Browser connection preference recovery and compatibility during staggered component upgrades
+- Observation document and frame geometry consistency, Canvas target identity checks,
+  and screenshot/session cleanup during cancellation or navigation
+
+## [0.2.1] - 2026-09-09
+
+### Changed
+- DSH Plugin: clarified installation, configuration, profile restart, and upgrade instructions
+
+### Fixed
+- CLI: reliable Windows self-updates, including executable replacement and daemon restart
+- CLI: Windows named-pipe connection continuity and stale daemon process detection
+- Windows installer: PowerShell 5.1 compatibility, path quoting, and staged executable replacement
+- CLI / DSH Plugin: cancellation propagation and upload/download cleanup when the parent process exits
+- Extension: tab ownership and session cleanup when agent tabs fail to open or borrowed tabs are returned or closed
+- Extension: navigation recovery when other extensions restrict Chrome DevTools Protocol access
+- Extension: background input filling, automatic append behavior, and verification of field values before reporting success
+- Extension: match observed form state to the correct element after page changes
+- Extension: UUID generation fallback for recording and overlays on insecure origins
+- Browser locale matching for regional language variants
+- DSH Plugin: observation state synchronization, thumbnail capture lifecycle, and stale preview cleanup
+- DSH Plugin: removed the obsolete client runtime host dependency
 
 ## [0.2.0] - 2026-09-02
 

@@ -49,14 +49,23 @@ jobs:
       - name: Run Windows named-pipe tests
         run: cargo test -p bsk --lib --locked daemon::ipc::windows::tests
 
+      - name: Run Windows audit storage tests
+        run: cargo test -p bsk --lib --locked daemon::audit::tests
+
+      - name: Run Windows audit and browser interaction policy tests
+        run: cargo test -p bsk --test audit_ws --test interaction_preferences --locked
+
+      - name: Verify background startup refusal inside the runner Job
+        run: cargo test -p bsk --test windows_daemon_start --locked restrictive_job_refuses_explicit_and_automatic_start_without_a_daemon -- --exact
+
       - name: Run Windows process liveness tests
         run: cargo test -p bsk --lib --locked daemon::lockfile::tests
 
       - name: Run Windows update tests
         run: cargo test -p bsk --lib --locked cli::update::tests
 
-      - name: Run Windows update and cancellation process tests
-        run: cargo test -p bsk --test windows_update --test windows_parent_cancel --locked
+      - name: Run Windows cancellation process tests
+        run: cargo test -p bsk --test windows_parent_cancel --locked
 
       - name: Run installer tests (Windows PowerShell 5.1)
         shell: powershell
@@ -65,6 +74,27 @@ jobs:
       - name: Run installer tests (PowerShell 7)
         shell: pwsh
         run: ./scripts/install-windows.test.ps1
+
+  windows-daemon-lifecycle:
+    name: Windows independent daemon and update lifecycle
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run lifecycle regressions in a verified independent host
+        shell: powershell
+        run: ./scripts/test-windows-daemon.ps1
+
+      - name: Upload lifecycle test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-daemon-lifecycle
+          path: target/windows-daemon-validation/
+          if-no-files-found: warn
 
   frontend:
     name: Frontend lint, typecheck, tests, build
@@ -92,11 +122,42 @@ jobs:
       - name: Compile extension TypeScript
         run: pnpm --filter @browser-skill/extension compile
 
+      - name: Run localization tests
+        run: pnpm --filter @browser-skill/i18n test
+
+      - name: Run VOM tests
+        run: pnpm --filter @browser-skill/vom test
+
       - name: Run extension tests
         run: pnpm ext:test
 
       - name: Build extension
         run: pnpm ext:build
+
+  browser-input:
+    name: Browser input readiness regression
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare extension types
+        run: pnpm --filter @browser-skill/extension exec wxt prepare
+
+      - name: Run browser input readiness regression
+        env:
+          BSK_CLICK_CHROME: google-chrome
+        run: pnpm --filter @browser-skill/extension exec vitest run src/tools/__tests__/click.browser.test.ts
 
   node-scripts:
     name: Node script tests

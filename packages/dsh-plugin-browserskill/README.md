@@ -54,9 +54,15 @@ the `bsk` CLI and browser extension separately when a release requires it.
 | `browser_session` | `start`, `stop`, `list` | Manage plugin-owned Agent Window sessions. |
 | `browser_page` | `navigate`, `back`, `forward`, `reload`, `wait` | Navigate the active tab and wait for page lifecycle events. |
 | `browser_inspect` | `observe`, `snapshot`, `html`, `screenshot`, `console`, `network` | Read semantic or diagnostic page state and capture screenshots. |
-| `browser_interact` | `click`, `hover`, `fill`, `select`, `press` | Interact with controls using fresh refs or selectors. |
+| `browser_interact` | `click`, `hover`, `wheel`, `scroll-to`, `focus`, `blur`, `fill`, `select`, `press` | Interact with controls using fresh refs or selectors. |
 | `browser_tabs` | `list`, `create`, `select`, `close`, `borrow`, `return` | Manage Agent Window tabs and temporarily borrow user tabs. |
 | `browser_assist` | `resize`, `emulate`, `request-help` | Resize or emulate the browser and pause for human-only steps. |
+
+For native wheel input (`action: "wheel"`), see the [wheel reference](../../docs/wheel.md)
+for signed deltas, optional targets, result semantics and interruption.
+
+For `browser_interact` with `action: "scroll-to"`, see the
+[scroll-to reference](../../docs/scroll-to.md) for parameters, visible bounds and errors.
 
 Arbitrary page-script evaluation and interaction recording are not supported.
 
@@ -70,6 +76,19 @@ One agent conversation can drive several browser sessions at once:
 - Every tool result echoes the session it actually acted on, so the model never has to guess.
 - The number of concurrent sessions started through the plugin is capped (`maxSessions`, default 5).
 - Unloading the plugin stops every session it started and kills in-flight bsk processes.
+
+Starts are journaled before creating a window. Lost replies and failed cleanup remain
+recoverable on reload; `browser_session action=list` reports `pendingCleanup`, and stop
+can retry it even when there is no current session. This requires a CLI and daemon
+that support recoverable starts. See [the lifecycle contract](../../docs/recoverable-session-starts.md).
+
+Stops also retain their target and cleanup intent. A failed or interrupted stop can be
+retried without accidentally stopping the next current session. Once the intent is saved,
+cancelling the call only stops waiting; cleanup continues in the background. If it finishes
+before a retry, that retry acknowledges the original result. With several unacknowledged
+stops, pass `session` or the owned `requestId` explicitly (not both). List exposes request
+IDs; stop results include `requestId` and `alreadyClosed`. Completed receipts survive reload
+until acknowledged and do not occupy browser capacity.
 
 **Ownership boundary**: the bsk daemon may be shared with other agents, terminals, or dsh
 instances. The plugin therefore only ever sees and operates on sessions it created itself —
@@ -115,6 +134,7 @@ All fields are optional; omitted fields use the defaults below:
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `bskPath` | `bsk` | Path to the CLI binary. |
+| `sessionStateDirectory` | Scoped under `$BSK_HOME/dsh-starts` (or `~/.bsk/dsh-starts`) | Durable recovery records; optionally isolate by host/profile. |
 | `defaultTimeoutMs` | `120000` | Default command timeout in milliseconds. |
 | `maxSessions` | `5` | Maximum concurrent sessions started by this plugin. |
 | `observationEnabled` | `true` | Enable live browser observation. |
@@ -129,18 +149,30 @@ the `browser-skill` skill is successfully invoked, either by the model or throug
 
 ## Live browser view
 
-The dsh Web UI shows the plugin's browser sessions in a floating panel. If your
-profile provides the `dsh-better-sidebar` integration, the view appears in a
-**Browser Skill** sidebar tab instead.
+The dsh Web UI prefers a **Browser Skill** tab in DSH's native right sidebar.
+The native tab opens when the current conversation first has a browser session;
+ordinary screenshot and action updates do not switch tabs or reopen a tab you
+closed. You can reopen it from the sidebar's guide.
+
+The native sidebar is optional. Profiles without its services use a floating
+panel, and a failed native integration falls back to that panel. No
+`dsh-better-sidebar` installation is required; it can coexist with BrowserSkill,
+which registers directly with DSH rather than with the third-party sidebar.
 
 - See the current action, elapsed time, and recent screenshot for each session.
 - Select a session to focus on it. The sidebar view follows the current conversation.
+- Use **Use floating view** to move observation into a floating panel, and
+  **Move to sidebar** (or **Show here** in the tab) to return. This choice lasts
+  only until the page reloads; it is not saved in your profile or browser storage.
 - Use **Interrupt** to cancel the current browser command. The agent may continue
   with another action afterward.
 - Drag or resize the floating panel, or use **Pop out** to open a Picture-in-Picture
   window in browsers that support it.
 - Periodic screenshots are requested while a browser observation view is visible.
   Configure the active and idle intervals with the options above.
+
+The floating panel shows all browser sessions managed by this plugin instance;
+the native tab shows the current conversation's browsers and those of its subagents.
 
 The observation endpoints require a loopback address such as `localhost` or
 `127.0.0.1`. Access through a LAN hostname or non-loopback reverse proxy is not supported.
