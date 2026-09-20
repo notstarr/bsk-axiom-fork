@@ -9,7 +9,7 @@ function fakeAgentWindow(ids: number[]) {
     create: vi.fn(async () => {
       const id = ids[i++];
       if (id === undefined) throw new Error("ran out of fake ids");
-      return id;
+      return { windowId: id, initialTabIds: [] };
     }),
     remove: vi.fn(async () => {}),
     ensureActiveTab: vi.fn(async () => 1),
@@ -45,12 +45,15 @@ function makeDeps(
     if (opts.getAllError) throw opts.getAllError;
     return opts.cookies ?? [];
   });
-  const send = vi.fn(async () => {
+  const send = vi.fn(async (_tabId: number, _method: string, _params?: object) => {
     if (opts.sendError) throw opts.sendError;
     return opts.storageReply ?? { result: { value: JSON.stringify({ local: {}, session: {} }) } };
   });
   const trackSessionTab = vi.fn();
-  const cdp = { send, trackSessionTab } satisfies CredentialsDeps["cdp"];
+  const cdp = {
+    send: send as unknown as CredentialsDeps["cdp"]["send"],
+    trackSessionTab,
+  } satisfies CredentialsDeps["cdp"];
   const tabsApi = {
     get:
       opts.get ??
