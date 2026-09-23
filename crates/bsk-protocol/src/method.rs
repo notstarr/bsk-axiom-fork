@@ -118,6 +118,8 @@ pub enum Method {
     ToolDebug,
     #[serde(rename = "tool.network")]
     ToolNetwork,
+    #[serde(rename = "tool.credentials")]
+    ToolCredentials,
     #[serde(rename = "tool.evaluate")]
     ToolEvaluate,
     #[serde(rename = "tool.wait_for_navigation")]
@@ -221,6 +223,7 @@ impl Method {
             | Method::ToolScreenshotRead
             | Method::ToolConsole
             | Method::ToolNetwork
+            | Method::ToolCredentials
             | Method::ToolWaitForNavigation
             | Method::ToolWaitMs
             | Method::ToolRequestHelp
@@ -307,6 +310,16 @@ mod tests {
     }
 
     #[test]
+    fn credentials_method_round_trips() {
+        let method: Method = serde_json::from_value(json!("tool.credentials")).unwrap();
+        assert_eq!(method, Method::ToolCredentials);
+        assert_eq!(
+            serde_json::to_value(method).unwrap(),
+            json!("tool.credentials")
+        );
+    }
+
+    #[test]
     fn emulate_method_round_trips() {
         let method: Method = serde_json::from_value(json!("tool.emulate")).unwrap();
         assert_eq!(method, Method::ToolEmulate);
@@ -369,6 +382,7 @@ mod tests {
         assert!(!Method::ToolScreenshot.is_mutating());
         assert!(!Method::ToolConsole.is_mutating());
         assert!(!Method::ToolNetwork.is_mutating());
+        assert!(!Method::ToolCredentials.is_mutating());
         assert!(!Method::ToolWaitForNavigation.is_mutating());
         assert!(!Method::ToolWaitMs.is_mutating());
     }

@@ -122,6 +122,10 @@ fn main() {
     dump!(NetworkResult, "tool_network_result");
     dump!(NetworkEntry, "tool_network_entry");
 
+    dump!(CredentialsParams, "tool_credentials_params");
+    dump!(CredentialEntry, "tool_credentials_entry");
+    dump!(CredentialsResult, "tool_credentials_result");
+
     dump!(EvaluateParams, "tool_evaluate_params");
     dump!(EvaluateResult, "tool_evaluate_result");
     dump!(EvaluateError, "tool_evaluate_error");
