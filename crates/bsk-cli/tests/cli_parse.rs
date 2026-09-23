@@ -804,3 +804,48 @@ fn canvas_click_requires_complete_capture_coordinates() {
         assert!(Cli::try_parse_from(argv).is_err());
     }
 }
+
+// axiom fork: `credentials` — the command the fork adds on top of upstream.
+// Guards the wiring this port had to redo by hand (Command variant, module,
+// dispatch) and the required/optional argument shape.
+#[test]
+fn parses_credentials_with_required_flags() {
+    let cli = parse(&[
+        "bsk",
+        "credentials",
+        "--session",
+        "abcd",
+        "--domain",
+        "example.com",
+    ]);
+    let Command::Credentials(args) = cli.command else {
+        panic!("expected credentials subcommand");
+    };
+    assert_eq!(args.session, "abcd");
+    assert_eq!(args.domain, "example.com");
+    assert_eq!(args.tab_id, None);
+}
+
+#[test]
+fn parses_credentials_with_tab_id() {
+    let cli = parse(&[
+        "bsk",
+        "credentials",
+        "--session",
+        "abcd",
+        "--domain",
+        "example.com",
+        "--tab-id",
+        "42",
+    ]);
+    let Command::Credentials(args) = cli.command else {
+        panic!("expected credentials subcommand");
+    };
+    assert_eq!(args.tab_id, Some(42));
+}
+
+#[test]
+fn credentials_requires_session_and_domain() {
+    assert!(Cli::try_parse_from(["bsk", "credentials", "--domain", "example.com"]).is_err());
+    assert!(Cli::try_parse_from(["bsk", "credentials", "--session", "abcd"]).is_err());
+}
