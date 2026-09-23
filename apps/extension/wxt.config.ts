@@ -41,6 +41,8 @@ export default defineConfig({
     permissions: [
       "alarms",
       "activeTab",
+      // axiom fork: `tool.credentials` reads HttpOnly cookies via chrome.cookies.
+      "cookies",
       "debugger",
       "downloads",
       "idle",

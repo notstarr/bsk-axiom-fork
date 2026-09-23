@@ -263,6 +263,35 @@ export interface NetworkResult {
   truncated: boolean;
 }
 
+// Axiom fork: `tool.credentials`. `chrome.cookies` is the only way to observe
+// HttpOnly cookies, which page scripts cannot read.
+export interface CredentialEntry {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  http_only: boolean;
+  secure: boolean;
+  same_site?: string;
+  /** Seconds since the UNIX epoch; absent for session cookies. */
+  expires?: number;
+}
+
+export interface CredentialsParams {
+  session_id: string;
+  tab_id?: number;
+  domain: string;
+}
+
+export interface CredentialsResult {
+  target: string;
+  cookie_count: number;
+  cookies: CredentialEntry[];
+  /** origin -> { key -> value }; sessionStorage keys carry a `session: ` prefix. */
+  storage_by_origin: Record<string, Record<string, string>>;
+  formatted_headers: Record<string, string>;
+}
+
 export type TabScopeFilter = "user" | "agent" | "all";
 
 export interface TabInfo {
