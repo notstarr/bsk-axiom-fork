@@ -10,8 +10,14 @@ use crate::daemon;
 pub const DEFAULT_WS_PORT: u16 = 52800;
 /// Default daemon idle timeout (10 minutes per design §3.2).
 pub const DEFAULT_DAEMON_IDLE: Duration = Duration::from_secs(10 * 60);
-/// Default session idle timeout (5 minutes per design §5).
-pub const DEFAULT_SESSION_IDLE: Duration = Duration::from_secs(5 * 60);
+/// Default session idle timeout.
+///
+/// axiom fork: raised from upstream's 5 minutes to 30. A pentest Intent keeps
+/// several browser sessions open for the whole run (bootstrap enumerates one
+/// session per browser instance), and the upstream default silently reaped a
+/// session mid-run: the worker then saw "session not registered", could not
+/// re-read that identity, and had to record it as not-collected.
+pub const DEFAULT_SESSION_IDLE: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Subcommand)]
 pub enum DaemonCmd {
@@ -85,7 +91,7 @@ pub struct StartArgs {
     #[arg(long)]
     pub foreground: bool,
 
-    /// Session idle timeout, e.g. `5m`, `30s`. Default 5 minutes.
+    /// Session idle timeout, e.g. `5m`, `30s`. Default 30 minutes (axiom fork).
     #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
     pub session_idle: Option<Duration>,
 
