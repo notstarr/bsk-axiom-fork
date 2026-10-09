@@ -120,6 +120,25 @@ reference it from there; never paste secrets into the report body or chat output
 bsk credentials --domain <authorized-target> --session <id>
 ```
 
+**Domain matching is exact-suffix, and does not include parent domains.** The filter is passed
+through to `chrome.cookies.getAll({ domain })`, which returns only cookies whose domain *is* that
+value or a **subdomain** of it. A session cookie set on the parent domain is therefore **not**
+returned when you name a precise subdomain:
+
+```sh
+# Misses a session cookie set on the parent (.example.com)
+bsk credentials --domain app.example.com --session <id>
+
+# Preferred: name the registrable parent, then pick the cookie you need by name
+bsk credentials --domain example.com --session <id>
+```
+
+This is the usual cause of "only one unrelated cookie came back". It is **not** an HttpOnly
+limitation — reading HttpOnly cookies is exactly why this tool exists instead of `evaluate`; the
+`chrome.cookies` API returns them, and the result marks each one with `http_only`. Only after
+retrying with the parent domain and still finding no session cookie should you conclude the
+session lives somewhere other than a cookie.
+
 This is the **only** command in this skill that may read credentials, cookies, tokens or other
 secrets; every other tool stays bound by the prohibition above.
 

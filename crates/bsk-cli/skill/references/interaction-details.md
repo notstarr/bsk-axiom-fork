@@ -31,7 +31,9 @@ snapshot or changed page identity invalidates continuation; then observe afresh.
 Use `console` / `network` for bounded read-only diagnostics; follow returned
 sequence cursors. `credentials --domain <authorized-target> --session <id>` dumps
 cookies (including HttpOnly) and web storage for one domain as a replay-ready
-payload — see the axiom-fork section in SKILL.md for its scope limits.
+payload — see the axiom-fork section in SKILL.md for its scope limits. Its domain
+filter is exact-suffix and excludes parent domains, so name the registrable parent
+(e.g. `example.com`, not `app.example.com`) when the session cookie lives higher up.
 `emulate --device iphone-14` affects one tab; `--off` restores it.
 `evaluate` is a last resort: inspect JSON `.ok`, since a script exception can have
 CLI exit code 0. Never evaluate secrets. `record start` captures user actions;
