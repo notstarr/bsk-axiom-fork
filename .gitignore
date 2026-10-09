@@ -25,3 +25,6 @@ evals/browser/agents.local.json
 # Environment
 .env.local
 .env.*.local
+
+# axiom fork: 部署给 Chrome 解压加载的扩展副本（构建产物，不入库）
+/axiom-extension/

@@ -29,7 +29,10 @@ snapshot or changed page identity invalidates continuation; then observe afresh.
 ## Diagnostics and other tools
 
 Use `console` / `network` for bounded read-only diagnostics; follow returned
-sequence cursors. `emulate --device iphone-14` affects one tab; `--off` restores it.
+sequence cursors. `credentials --domain <authorized-target> --session <id>` dumps
+cookies (including HttpOnly) and web storage for one domain as a replay-ready
+payload — see the axiom-fork section in SKILL.md for its scope limits.
+`emulate --device iphone-14` affects one tab; `--off` restores it.
 `evaluate` is a last resort: inspect JSON `.ok`, since a script exception can have
 CLI exit code 0. Never evaluate secrets. `record start` captures user actions;
 read its help first and never record banking, SSO or password-manager pages.

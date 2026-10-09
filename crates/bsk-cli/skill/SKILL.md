@@ -10,7 +10,8 @@ description: |
 
 Use `bsk` in an **Agent Window** with the user's existing logins. User tabs
 require explicit borrowing. This skill does not install the extension or handle
-advice-only tasks. Never extract credentials, cookies, tokens, or other secrets.
+advice-only tasks. Never extract credentials, cookies, tokens, or other secrets —
+the only exception is the axiom-fork `credentials` command described below.
 
 ## Before acting
 
@@ -106,6 +107,21 @@ Choose the relevant example, using a ref that actually appeared on the page:
 Use `snapshot` for static accessibility, `get-html` for exact markup, and screenshots
 for visuals. Prefer `observe` to find ordinary controls. Obtain fresh refs before
 acting on HTML or screenshot findings. Inspect unknown effects before retrying.
+
+## Axiom fork: credential extraction
+
+This fork adds `credentials` for the xrayAI penetration-testing platform: extracting cookies
+(including HttpOnly) and web storage from an explicitly targeted domain is legitimate engagement
+output. Scope stays narrow — run it only against test targets you are authorized to assess, never
+against unrelated sites the browser happens to visit. Write extracted material to `evidence/` and
+reference it from there; never paste secrets into the report body or chat output.
+
+```sh
+bsk credentials --domain <authorized-target> --session <id>
+```
+
+This is the **only** command in this skill that may read credentials, cookies, tokens or other
+secrets; every other tool stays bound by the prohibition above.
 
 ## Read details only when needed
 
